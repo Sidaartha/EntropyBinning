@@ -108,8 +108,6 @@ class MDLP_Discretizer(object):
 		self._boundaries = self.compute_boundary_points_all_features()
 		#initialize feature bins with empty arrays
 		self._cuts = {f: [] for f in self._features}
-		self._frequencies = {f: [] for f in self._features}
-		self._frequencies_test = {f: [] for f in self._features}
 		#get cuts for all features
 		self.all_features_accepted_cutpoints()
 		#further binning
