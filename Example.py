@@ -37,7 +37,6 @@ df_train_raw = df_train_raw.drop_duplicates()
 
 # All continuous feature columns
 features=['f986', 'f988', 'f989', 'f994', 'f998', 'f1001', 'f1002', 'f1010', 'f1003', 'f1004', 'f1006', 'f1009', 'f1052', 'f1053', 'f778', 'f1054', 'f534', 'f1149', 'f1092', 'f1055', 'f1056', 'f1057', 'f1093', 'f1094', 'f1058', 'f1061', 'f1062', 'f1122', 'f1123', 'f1124', 'f1099', 'f1100', 'f1104', 'f1065', 'f1066', 'f1067', 'f1074', 'f1075', 'f1076', 'f1077', 'f1079', 'f1080', 'f635']
-features=['f1052']
 
 # Discretization initializer
 dis = eb.MDLP_Discretizer(dataset=df_train_raw, class_label=class_label, features=features, min_bins=8, min_freq=2)
