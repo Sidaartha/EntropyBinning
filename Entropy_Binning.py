@@ -49,7 +49,7 @@ def cut_point_information_gain(dataset, cut_point, feature_label, class_label):
 	return gain
 
 class MDLP_Discretizer(object):
-	def __init__(self, dataset, testset, class_label, out_path_data, out_test_path_data, out_path_bins, features=None, min_bins=None, min_freq=None):
+	def __init__(self, dataset, class_label, features=None, min_bins=None, min_freq=None):
 		'''
 		initializes discretizer object:
 			saves raw copy of data and creates self._data with only features to discretize and class
@@ -68,11 +68,7 @@ class MDLP_Discretizer(object):
 		if not isinstance(dataset, pd.core.frame.DataFrame):  # class needs a pandas dataframe
 			raise AttributeError('Input dataset should be a pandas data frame')
 
-		if not isinstance(testset, pd.core.frame.DataFrame):  # class needs a pandas dataframe
-			raise AttributeError('Test dataset should be a pandas data frame')
-
 		self._data_raw = dataset #copy or original input data
-		self._test_raw = testset #copy or original test data
 		self._size = len(self._data_raw)
 
 		self._class_name = class_label
@@ -98,17 +94,16 @@ class MDLP_Discretizer(object):
 		self._partition_dict = {}
 		self._candidate_dict = {}
 		self._partition_freq = {}
+
 		if min_bins and min_freq:
 			self._min_bins = min_bins
 			self._min_freq = min_freq
 
 		#other features that won't be discretized
 		self._ignored_features = set(self._data_raw.columns) - set(self._features)
-		self._ignored_features_t = set(self._test_raw.columns) - set(self._features)
 
 		#create copy of data only including features to discretize and class
 		self._data = self._data_raw.loc[:, self._features + [class_label]]
-		self._test = self._test_raw.loc[:, self._features + [class_label]]
 		#pre-compute all boundary points in dataset
 		self._boundaries = self.compute_boundary_points_all_features()
 		#initialize feature bins with empty arrays
@@ -117,10 +112,9 @@ class MDLP_Discretizer(object):
 		self._frequencies_test = {f: [] for f in self._features}
 		#get cuts for all features
 		self.all_features_accepted_cutpoints()
+		#further binning
 		if min_bins and min_freq:
 			self.all_features_min_criteria_cutpoints()
-		#discretize self._data
-		self.apply_cutpoints(out_data_path=out_path_data, out_test_path=out_test_path_data, out_bins_path=out_path_bins)
 
 	def MDLPC_criterion(self, data, feature, cut_point):
 		'''
@@ -272,15 +266,13 @@ class MDLP_Discretizer(object):
 		decision = self.MDLPC_criterion(data=data_partition, feature=feature, cut_point=cut_candidate)
 		#apply decision
 		if not decision:
-			# print('No Cut : ', feature)
+			cut_candidate = self.best_cut_point_min_freq(data=data_partition, feature=feature)
 			if feature in self._partition_dict:
-				cut_candidate = self.best_cut_point_min_freq(data=data_partition, feature=feature)
 				if cut_candidate != None:
 					self._partition_dict[feature].append(data_partition.index)
 					self._candidate_dict[feature].append(cut_candidate)
 					self._partition_freq[feature].append(self.frequency_partition(data=data_partition, feature=feature, cut_point=cut_candidate))
 			else :
-				cut_candidate = self.best_cut_point_min_freq(data=data_partition, feature=feature)
 				if cut_candidate != None:
 					self._partition_dict[feature] = [data_partition.index]
 					self._candidate_dict[feature] = [cut_candidate]
@@ -316,9 +308,7 @@ class MDLP_Discretizer(object):
 		all_data_partitions = self._partition_dict[feature]
 		all_data_frequency  = self._partition_freq[feature]
 		all_data_candidates = self._candidate_dict[feature]
-		# print(all_data_candidates)
-		# print(all_data_frequency)
-		# print(all_data_candidates)
+
 		freq = self._min_freq
 
 		for i in range(bins):
@@ -333,19 +323,8 @@ class MDLP_Discretizer(object):
 				#stop if constant or null feature values
 				if len(data_partition[feature].unique()) < 2:
 					gain_list.append(0)
-				else : 
-					# par_left_freq= 0
-					# par_right_freq= 0
-					# for j in partition_freq:
-					# 	par_left_freq  += j[0]
-					# 	par_right_freq += j[1]
-					# # print(par_left_freq, par_right_freq, cut_candidate)
-					# if par_left_freq > (self._size)*freq/100 and par_right_freq > (self._size)*freq/100:
-					# 	# print("accepted")
-					# 	gain_list.append(cut_point_information_gain(dataset=data_partition, cut_point=cut_candidate, feature_label=feature, class_label=self._class_name))
-					# else:
-					# 	gain_list.append(0)
 
+				else : 
 					gain_list.append(cut_point_information_gain(dataset=data_partition, cut_point=cut_candidate, feature_label=feature, class_label=self._class_name))
 			
 			if max(gain_list) != 0:
@@ -380,8 +359,6 @@ class MDLP_Discretizer(object):
 
 			#order cutpoints in ascending order
 			self._cuts[feature] = sorted(self._cuts[feature])
-			# print(all_data_frequency)
-			# print(all_data_candidates)
 
 		return
 
@@ -405,136 +382,69 @@ class MDLP_Discretizer(object):
 			freq_list.append([len(data_classes_l[data_classes_l == c]), len(data_classes_r[data_classes_r == c])])
 		return freq_list
 
-	def ranges(self):
-		ranges_dict = {}
-		for key, value in self._cuts.items():
-			if len(self._cuts[key]) != 0:
-				# ranges_dict[key] = [-np.inf] + value + [np.inf]
-				ranges_dict[key] = [self.min_dict[key]] + value + [self.max_dict[key]]
-		return ranges_dict
-
-	def frequencies(self, target_class = None):
-		frequencies_dict = {}
-		if target_class :
-			for i, val_ in zip(range(len(self._classes)), self._classes):
-				if val_ == target_class: frequencies_id = i
-			for key, value in self._frequencies.items():
-				if len(self._cuts[key]) != 0:
-					frequencies_dict[key] = value[frequencies_id]
-			return frequencies_dict
-		else : 
-			for key, value in self._frequencies.items():
-				if len(self._cuts[key]) != 0:
-					frequencies_dict[key] = value
-			return frequencies_dict
-
-	def frequencies_test(self, target_class = None):
-		frequencies_dict = {}
-		if target_class :
-			for i, val_ in zip(range(len(self._classes)), self._classes):
-				if val_ == target_class: frequencies_id = i
-			for key, value in self._frequencies_test.items():
-				if len(self._cuts[key]) != 0:
-					frequencies_dict[key] = value[frequencies_id]
-			return frequencies_dict
-		else : 
-			for key, value in self._frequencies_test.items():
-				if len(self._cuts[key]) != 0:
-					frequencies_dict[key] = value
-			return frequencies_dict
-
-	def apply_cutpoints(self, out_data_path=None, out_test_path=None, out_bins_path=None):
-		'''
-		Discretizes data by applying bins according to self._cuts. Saves a new, discretized file, and a description of
-		the bins
-		:param out_data_path: path to save discretized data
-		:param out_test_path: path to save discretized test data
-		:param out_bins_path: path to save bins description
-		:return:
-		'''
-		pbin_label_collection = {}
-		bin_label_collection = {}
+	def bins_range(self):
+		range_dict = {}
 		for attr in self._features:
-			# print(self._cuts[attr])
-			if len(self._cuts[attr]) == 0:
-				# self._data[attr] = 'All'
-				# self._data[attr] = self._data[attr].values
-				# self._test[attr] = self._test[attr].values
-				self._data[attr] = 1
-				self._test[attr] = 1
-				self._frequencies[attr] = [[len(self._data.loc[(self._data[attr] == 1) & (self._data[self._class_name] == j)])] for j in self._classes if len(self._cuts[attr]) == 0]
-				self._frequencies_test[attr] = [[len(self._test.loc[(self._test[attr] == 1) & (self._test[self._class_name] == j)])] for j in self._classes if len(self._cuts[attr]) == 0]
-				pbin_label_collection[attr] = ['No binning']
-				bin_label_collection[attr] = ['All']
+			# Range [a, b). i.e, left-inclusive
+			range_dict[attr] = [-np.inf] + self._cuts[attr] + [np.inf]
+		return range_dict
+
+	def bins_frequency(self):
+		freq_dict = {}
+		for attr in self._features:
+			range_attr = [-np.inf] + self._cuts[attr] + [np.inf]
+			freq_dict[attr] = []
+			for i in range(len(range_attr)-1):
+				freq_dict[attr].append(len(self._data_raw.query(str(range_attr[i])+' <= '+attr+' < '+str(range_attr[i+1]))))
+		return freq_dict
+
+	def bins_frequency_target(self, target):
+		freq_dict = {}
+		for attr in self._features:
+			range_attr = [-np.inf] + self._cuts[attr] + [np.inf]
+			freq_dict[attr] = []
+			for i in range(len(range_attr)-1):
+				df_dis = self._data_raw.query(str(range_attr[i])+' <= '+attr+' < '+str(range_attr[i+1]))
+				freq_dict[attr].append(len(df_dis[df_dis[self._class_name] == target]))
+		return freq_dict
+
+	def bins_frequency_fwd(self, data):
+
+		if not isinstance(data, pd.core.frame.DataFrame):  # class needs a pandas dataframe
+			raise AttributeError('Input dataset should be a pandas data frame')
+		freq_dict = {}
+		for attr in self._features:
+			# Raise a warning
+			if attr not in data:
+				print('WARNING : '+attr+' column is missing in fwd data!')
 			else:
-				cuts = [-np.inf] + self._cuts[attr] + [np.inf]
-				print(attr, cuts)
-				start_bin_indices = range(0, len(cuts) - 1)
-				pbin_labels = ['%s_to_%s' % (str(cuts[i]), str(cuts[i+1])) for i in start_bin_indices]
-				bin_labels = ['%d' % (i+1) for i in start_bin_indices]
-				pbin_label_collection[attr] = pbin_labels
-				bin_label_collection[attr] = bin_labels
-				self._data[attr] = pd.cut(x=self._data[attr].values, bins=cuts, right=False, labels=bin_labels,
-										  precision=6, include_lowest=True)
-				self._test[attr] = pd.cut(x=self._test[attr].values, bins=cuts, right=False, labels=bin_labels,
-										  precision=6, include_lowest=True)
-				self._frequencies[attr] = [[len(self._data.loc[(self._data[attr] == i) & (self._data[self._class_name] == j)]) for i in bin_labels] for j in self._classes if len(self._cuts[attr]) != 0]
-				self._frequencies_test[attr] = [[len(self._test.loc[(self._test[attr] == i) & (self._test[self._class_name] == j)]) for i in bin_labels] for j in self._classes if len(self._cuts[attr]) != 0]
+				range_attr = [-np.inf] + self._cuts[attr] + [np.inf]
+				freq_dict[attr] = []
 
-		#reconstitute full data, now discretized
-		if self._ignored_features:
-		#the line below may help in removing double class column ; looks like it works
-			self._data = self._data.loc[:, self._features]
-			to_return_train = pd.concat([self._data, self._data_raw[list(self._ignored_features)]], axis=1)
-			to_return_train = to_return_train[self._data_raw.columns] #sort columns so they have the original order
-		else:
-		#the line below may help in removing double class column ; looks like it works
-			self._data = self._data.loc[:, self._features]
-			to_return_train = self._data
+				if data[attr].isnull().values.any:
+					data = data[~data[attr].isnull()]
 
-		#save data as csv
-		if out_data_path:
-			to_return_train.to_csv(out_data_path, index=False)
+				for i in range(len(range_attr)-1):
+					freq_dict[attr].append(len(data.query(str(range_attr[i])+' <= '+attr+' < '+str(range_attr[i+1]))))
+		return freq_dict
 
-		#reconstitute test data, now discretized
-		if self._ignored_features:
-		#the line below may help in removing double class column ; looks like it works
-			self._test = self._test.loc[:, self._features]
-			to_return_test = pd.concat([self._test, self._test_raw[list(self._ignored_features_t)]], axis=1)
-			to_return_test = to_return_test[self._test_raw.columns] #sort columns so they have the original order
-		else:
-		#the line below may help in removing double class column ; looks like it works
-			self._test = self._test.loc[:, self._features]
-			to_return_test = self._test
+	def bins_frequency_fwd_target(self, data, target):
 
-		#save data as csv
-		if out_test_path:
-			to_return_test.to_csv(out_test_path, index=False)
-
-		#save bins description
-		if out_bins_path:
-			feature_list = []
-			range_list = []
-			frequencie_list_train = []
-			frequencie_list_test = []
-			for i in self._features:
-				feature_list.append(i)
-				# range_list.append([-np.inf] + self._cuts[i] + [np.inf])
-				range_list.append([self.min_dict[i]] + self._cuts[i] + [self.max_dict[i]])
-				if len(self._frequencies[i]) != 0 : frequencie_list_train.append(self._frequencies[i])
-				else : frequencie_list_train.append(['Binning not possible']*len(self._classes))
-				if len(self._frequencies_test[i]) != 0 : frequencie_list_test.append(self._frequencies_test[i])
-				else : frequencie_list_test.append(['Binning not possible']*len(self._classes))
-
-			df_dis = pd.DataFrame(data={"Feature": feature_list, "Range" : range_list})
-			frequencie_list_train = np.array(frequencie_list_train)
-			frequencie_list_test = np.array(frequencie_list_test)
-			if len(self._features) > 1:
-				for i in range(len(self._classes)): 
-					df_dis['Frequency_train [ '+str(self._classes[i])+' ]'] = frequencie_list_train[:,i]
-					df_dis['Frequency_fwd [ '+str(self._classes[i])+' ]'] = frequencie_list_test[:,i]
+		if not isinstance(data, pd.core.frame.DataFrame):  # class needs a pandas dataframe
+			raise AttributeError('Input dataset should be a pandas data frame')
+		freq_dict = {}
+		for attr in self._features:
+			# Raise a warning
+			if attr not in data:
+				print('WARNING : '+attr+' column is missing in fwd data!')
 			else:
-				for i in range(len(self._classes)):
-					df_dis['Frequency_train [ '+str(self._classes[i])+' ]'] = str(list(frequencie_list_train[0][i]))
-					df_dis['Frequency_fwd [ '+str(self._classes[i])+' ]'] = str(list(frequencie_list_test[0][i]))
-			df_dis.to_csv(out_bins_path, sep=',',index=False)
+				range_attr = [-np.inf] + self._cuts[attr] + [np.inf]
+				freq_dict[attr] = []
+
+				if data[attr].isnull().values.any:
+					data = data[~data[attr].isnull()]
+
+				for i in range(len(range_attr)-1):
+					df_dis = data.query(str(range_attr[i])+' <= '+attr+' < '+str(range_attr[i+1]))
+					freq_dict[attr].append(len(df_dis[df_dis[self._class_name] == target]))
+		return freq_dict
