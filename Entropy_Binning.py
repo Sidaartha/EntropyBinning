@@ -419,9 +419,6 @@ class MDLP_Discretizer(object):
 				range_attr = [-np.inf] + self._cuts[attr] + [np.inf]
 				freq_dict[attr] = []
 
-				if data[attr].isnull().values.any:
-					data = data[~data[attr].isnull()]
-
 				for i in range(len(range_attr)-1):
 					freq_dict[attr].append(len(data.query(str(range_attr[i])+' <= '+attr+' < '+str(range_attr[i+1]))))
 		return freq_dict
@@ -438,9 +435,6 @@ class MDLP_Discretizer(object):
 			else:
 				range_attr = [-np.inf] + self._cuts[attr] + [np.inf]
 				freq_dict[attr] = []
-
-				if data[attr].isnull().values.any:
-					data = data[~data[attr].isnull()]
 
 				for i in range(len(range_attr)-1):
 					df_dis = data.query(str(range_attr[i])+' <= '+attr+' < '+str(range_attr[i+1]))
