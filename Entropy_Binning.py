@@ -98,6 +98,7 @@ class MDLP_Discretizer(object):
 		if min_bins and min_freq:
 			self._min_bins = min_bins
 			self._min_freq = min_freq
+		else : self._min_freq = None
 
 		#other features that won't be discretized
 		self._ignored_features = set(self._data_raw.columns) - set(self._features)
@@ -264,17 +265,18 @@ class MDLP_Discretizer(object):
 		decision = self.MDLPC_criterion(data=data_partition, feature=feature, cut_point=cut_candidate)
 		#apply decision
 		if not decision:
-			cut_candidate = self.best_cut_point_min_freq(data=data_partition, feature=feature)
-			if feature in self._partition_dict:
-				if cut_candidate != None:
-					self._partition_dict[feature].append(data_partition.index)
-					self._candidate_dict[feature].append(cut_candidate)
-					self._partition_freq[feature].append(self.frequency_partition(data=data_partition, feature=feature, cut_point=cut_candidate))
-			else :
-				if cut_candidate != None:
-					self._partition_dict[feature] = [data_partition.index]
-					self._candidate_dict[feature] = [cut_candidate]
-					self._partition_freq[feature] = [self.frequency_partition(data=data_partition, feature=feature, cut_point=cut_candidate)]
+			if self._min_freq:
+				cut_candidate = self.best_cut_point_min_freq(data=data_partition, feature=feature)
+				if feature in self._partition_dict:
+					if cut_candidate != None:
+						self._partition_dict[feature].append(data_partition.index)
+						self._candidate_dict[feature].append(cut_candidate)
+						self._partition_freq[feature].append(self.frequency_partition(data=data_partition, feature=feature, cut_point=cut_candidate))
+				else :
+					if cut_candidate != None:
+						self._partition_dict[feature] = [data_partition.index]
+						self._candidate_dict[feature] = [cut_candidate]
+						self._partition_freq[feature] = [self.frequency_partition(data=data_partition, feature=feature, cut_point=cut_candidate)]
 			return  # if partition wasn't accepted, there's nothing else to do
 		if decision:
 			# try:
